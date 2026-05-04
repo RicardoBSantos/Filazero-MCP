@@ -11,7 +11,7 @@ const schema = z.object({
   sessionId: z.number().describe("ID da sessao retornado por get_available_sessions"),
 });
 
-const formCache = new Cache<unknown[]>();
+export const formCache = new Cache<unknown[]>();
 
 export const getBookingForm: ToolDefinition<typeof schema> = {
   name: "get_booking_form",
@@ -31,7 +31,12 @@ export const getBookingForm: ToolDefinition<typeof schema> = {
       const cacheKey = `form:${args.providerId}:${args.sessionId}`;
       const cached = formCache.get(cacheKey);
       if (cached) {
-        return toolSuccess({ providerId: args.providerId, sessionId: args.sessionId, customFields: cached });
+        return toolSuccess({
+          providerId: args.providerId,
+          sessionId: args.sessionId,
+          customFields: cached,
+          nextToolHint: "Preencha os campos retornados e use na tool schedule_appointment.",
+        });
       }
 
       const response = await filazeroClient.get(

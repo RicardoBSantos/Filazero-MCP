@@ -19,4 +19,8 @@ export class Cache<T> {
       expiresAt: Date.now() + ttlSeconds * 1000,
     });
   }
+
+  clear(): void {
+    this.store.clear();
+  }
 }

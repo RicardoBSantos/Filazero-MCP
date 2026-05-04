@@ -17,7 +17,7 @@ type NormalizedService = {
   description: string | null;
 };
 
-const servicesCache = new Cache<NormalizedService[]>();
+export const servicesCache = new Cache<NormalizedService[]>();
 
 function normalizeService(raw: unknown): NormalizedService {
   if (!isRecord(raw)) {

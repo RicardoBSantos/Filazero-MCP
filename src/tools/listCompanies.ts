@@ -9,7 +9,7 @@ import { toolSuccess } from "../types/index.js";
 
 const schema = z.object({}).strict();
 
-const companiesCache = new Cache<NormalizedCompany[]>();
+export const companiesCache = new Cache<NormalizedCompany[]>();
 
 function normalizeCompany(raw: unknown): NormalizedCompany {
   if (!isRecord(raw)) {
