@@ -12,13 +12,21 @@ MCP (Model Context Protocol) server for the Filazero platform — a public gatew
 - `npm run dev` — watch mode (`tsc --watch`)
 - `npm start` — run compiled server (`node dist/index.js`)
 
-No test framework configured yet.
+Test framework: vitest (`npm test`).
 
 ## Architecture
 
 Single-file server (`src/index.ts`) using `@modelcontextprotocol/sdk`. All logic lives here:
 
-- **MCP tools exposed:** `list_companies` (fetches companies from Filazero API with in-memory cache, TTL configurable), `consultar_tempo_espera` (ETA query — currently returns mock data)
+- **MCP tools exposed:**
+  - `list_companies` — lista empresas (cache em memória, TTL configurável)
+  - `get_company_services` — serviços de uma empresa pelo slug
+  - `get_available_dates` — dias com sessões disponíveis (slug + serviceId + ano/mês)
+  - `get_available_sessions` — sessões numa data específica
+  - `get_booking_form` — campos do formulário de agendamento
+  - `schedule_appointment` — cria agendamento (requer bearerToken)
+  - `check_ticket_status` — consulta status público de ticket por accessKey
+  - `list_my_tickets` — lista tickets do usuário autenticado (requer bearerToken)
 - **Transport:** stdio (`StdioServerTransport`)
 - **Validation:** Zod schemas for tool arguments
 - **HTTP:** axios with custom headers (Origin, Referer, User-Agent) to match Filazero app requests
