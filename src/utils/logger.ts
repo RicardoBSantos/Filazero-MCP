@@ -18,13 +18,7 @@ function log(level: LogLevel, message: string, data?: Record<string, unknown>): 
     ...data,
   };
 
-  const line = JSON.stringify(entry);
-
-  if (level === "error") {
-    process.stderr.write(line + "\n");
-  } else {
-    process.stdout.write(line + "\n");
-  }
+  process.stderr.write(JSON.stringify(entry) + "\n");
 }
 
 export const logger = {
