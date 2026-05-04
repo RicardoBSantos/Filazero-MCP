@@ -41,7 +41,7 @@ export const getAvailableDates: ToolDefinition<typeof schema> = {
         year: args.year,
         month: args.month,
         availableDays: days,
-        nextToolHint: "Use uma data retornada na tool get_available_slots.",
+        nextToolHint: "Use uma data retornada (campo data) na tool get_available_sessions.",
       });
     } catch (error) {
       throw new Error(`Falha ao buscar datas disponiveis: ${formatErrorMessage(error)}`);

@@ -45,7 +45,7 @@ export const getBookingForm: ToolDefinition<typeof schema> = {
         providerId: args.providerId,
         sessionId: args.sessionId,
         customFields: fields,
-        nextToolHint: "Preencha os campos retornados e use na tool create_appointment.",
+        nextToolHint: "Preencha os campos retornados e use na tool schedule_appointment.",
       });
     } catch (error) {
       throw new Error(`Falha ao buscar formulario da sessao ${args.sessionId}: ${formatErrorMessage(error)}`);

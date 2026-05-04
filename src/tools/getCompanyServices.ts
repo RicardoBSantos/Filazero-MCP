@@ -11,6 +11,7 @@ const schema = z.object({
 });
 
 type NormalizedService = {
+  rawId: number | null;
   serviceId: number;
   name: string;
   description: string | null;
@@ -24,6 +25,7 @@ function normalizeService(raw: unknown): NormalizedService {
   }
 
   return {
+    rawId: typeof raw.id === "number" ? raw.id : null,
     serviceId: resolveServiceId(raw),
     name: typeof raw.name === "string" ? raw.name : "Servico sem nome",
     description: typeof raw.description === "string" ? raw.description : null,
@@ -47,7 +49,7 @@ export const getCompanyServices: ToolDefinition<typeof schema> = {
       const cacheKey = `services:${args.slug}`;
       const cached = servicesCache.get(cacheKey);
       if (cached) {
-        return toolSuccess({ slug: args.slug, services: cached, nextToolHint: "Use o serviceId na tool get_service_locations." });
+        return toolSuccess({ slug: args.slug, services: cached, nextToolHint: "Use rawId para get_available_dates e get_available_sessions. Use serviceId para schedule_appointment." });
       }
 
       const response = await filazeroClient.get(`/api/companies/${args.slug}/services`);
@@ -59,7 +61,7 @@ export const getCompanyServices: ToolDefinition<typeof schema> = {
       return toolSuccess({
         slug: args.slug,
         services,
-        nextToolHint: "Use o serviceId na tool get_service_locations.",
+        nextToolHint: "Use rawId para get_available_dates e get_available_sessions. Use serviceId para schedule_appointment.",
       });
     } catch (error) {
       throw new Error(`Falha ao buscar servicos de '${args.slug}': ${formatErrorMessage(error)}`);

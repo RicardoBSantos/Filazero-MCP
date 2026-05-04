@@ -41,7 +41,7 @@ export const getAvailableSessions: ToolDefinition<typeof schema> = {
         serviceId: args.serviceId,
         date: args.date,
         sessions,
-        nextToolHint: "Use sessionId e resourceId na tool create_appointment.",
+        nextToolHint: "Use sessionId na tool get_booking_form e depois schedule_appointment.",
       });
     } catch (error) {
       throw new Error(`Falha ao buscar sessoes disponiveis para ${args.date}: ${formatErrorMessage(error)}`);

@@ -1,8 +1,6 @@
-import { throwIfBusinessError } from "./errors.js";
+import { throwIfBusinessError, isRecord } from "./errors.js";
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+export { isRecord };
 
 export function resolveServiceId(service: unknown): number {
   if (!isRecord(service)) {

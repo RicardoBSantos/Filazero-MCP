@@ -21,5 +21,5 @@ export type ToolDefinition<TSchema extends z.ZodTypeAny> = {
   description: string;
   schema: TSchema;
   inputSchema: object;
-  execute: (args: z.infer<TSchema>, bearerToken?: string) => Promise<ToolResult>;
+  execute: (args: z.infer<TSchema>) => Promise<ToolResult>;
 };
