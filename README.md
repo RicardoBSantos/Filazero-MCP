@@ -91,6 +91,70 @@ npm run test:watch
 
 ---
 
+## Testando com MCP Inspector
+
+O **MCP Inspector** é uma interface web interativa oficial do protocolo MCP para inspecionar e testar servidores MCP sem precisar de um cliente LLM. Permite invocar tools, ler resources e executar prompts diretamente pelo navegador.
+
+### Pré-requisito
+
+Compilar o servidor antes de rodar o Inspector:
+
+```bash
+npm run build
+```
+
+### Iniciar o Inspector
+
+```bash
+npx @modelcontextprotocol/inspector node dist/index.js
+```
+
+O Inspector inicia dois processos:
+- **Proxy server** (porta `3000` por padrão) — intermediário entre o navegador e o servidor MCP
+- **Interface web** (porta `5173` por padrão) — abre automaticamente em `http://localhost:5173`
+
+### Passando variáveis de ambiente
+
+```bash
+npx @modelcontextprotocol/inspector \
+  -e FILAZERO_API_URL=https://api.staging.filazero.net \
+  -e FILAZERO_APP_ORIGIN=https://app.filazero.net \
+  -e CACHE_TTL_COMPANIES=300 \
+  node dist/index.js
+```
+
+Ou carregando do `.env` diretamente via `dotenv`:
+
+```bash
+node -r dotenv/config node_modules/.bin/inspector dist/index.js
+```
+
+### Usando a interface
+
+1. Abra `http://localhost:5173` no navegador
+2. Clique em **Connect** — o Inspector conecta ao servidor via stdio
+3. Na aba **Tools**: selecione uma tool, preencha os parâmetros em JSON e clique em **Run Tool**
+4. Na aba **Resources**: selecione um resource URI e clique em **Read Resource**
+5. Na aba **Prompts**: selecione um prompt, preencha os argumentos e clique em **Get Prompt**
+
+### Exemplo: testar `list_companies`
+
+1. Aba **Tools** → selecione `list_companies`
+2. Parâmetros: `{}` (nenhum parâmetro necessário)
+3. Clique **Run Tool**
+4. Resultado aparece no painel direito em JSON
+
+### Exemplo: testar `schedule_appointment` (autenticado)
+
+1. Aba **Tools** → selecione `schedule_appointment`
+2. Preencha `bearerToken` com um token válido obtido do app Filazero
+3. Preencha os demais campos obtidos via `get_booking_form`
+4. Clique **Run Tool**
+
+> **Dica:** use `list_companies` → `get_company_services` → `get_available_dates` → `get_available_sessions` → `get_booking_form` em sequência para montar os parâmetros de `schedule_appointment`.
+
+---
+
 ## Integração com Claude Desktop
 
 Adicione o servidor ao arquivo de configuração do Claude Desktop:
