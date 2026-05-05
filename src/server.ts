@@ -1,5 +1,6 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -104,9 +105,80 @@ function createServer(): Server {
   return server;
 }
 
-export async function run(): Promise<void> {
+async function runStdio(): Promise<void> {
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
   logger.info("mcp_server_started", { transport: "stdio" });
+}
+
+async function runHttp(): Promise<void> {
+  const { default: express } = await import("express");
+
+  const app = express();
+  app.use(express.json());
+
+  const port = parseInt(process.env.MCP_HTTP_PORT || "3000", 10);
+
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", transport: "streamable-http" });
+  });
+
+  app.post("/mcp", async (req, res) => {
+    const server = createServer();
+    try {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+      });
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+      res.on("close", () => {
+        transport.close();
+        server.close();
+      });
+    } catch (error) {
+      logger.error("http_request_error", { error: error instanceof Error ? error.message : String(error) });
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: { code: -32603, message: "Internal server error" },
+          id: null,
+        });
+      }
+    }
+  });
+
+  app.get("/mcp", (_req, res) => {
+    res.status(405).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Method not allowed. Use POST." },
+      id: null,
+    });
+  });
+
+  app.delete("/mcp", (_req, res) => {
+    res.status(405).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Method not allowed." },
+      id: null,
+    });
+  });
+
+  app.use((_req, res) => {
+    res.status(404).json({ error: "Not found" });
+  });
+
+  app.listen(port, "0.0.0.0", () => {
+    logger.info("mcp_server_started", { transport: "streamable-http", port });
+  });
+}
+
+export async function run(): Promise<void> {
+  const transport = process.env.MCP_TRANSPORT || "stdio";
+
+  if (transport === "http") {
+    await runHttp();
+  } else {
+    await runStdio();
+  }
 }

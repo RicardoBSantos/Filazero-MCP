@@ -4,10 +4,11 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 COPY tsconfig.json ./
-COPY index.ts ./src/index.ts
+COPY index.ts ./
+COPY src/ ./src/
 RUN npm run build
 
 # Stage 2: Production
@@ -18,7 +19,7 @@ WORKDIR /app
 RUN addgroup -S mcpgroup && adduser -S mcpuser -G mcpgroup
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --omit=dev
 
 COPY --from=builder /app/dist ./dist
 
