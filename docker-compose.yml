@@ -1,0 +1,67 @@
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: filazero-mcp-server
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    expose:
+      - "3000"
+    networks:
+      - mcp_internal
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: filazero-nginx-gateway
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-8080}:80"
+    networks:
+      - mcp_internal
+      - mcp_public
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    volumes:
+      - nginx_logs:/var/log/nginx
+
+networks:
+  mcp_internal:
+    driver: bridge
+    internal: true
+    name: filazero_mcp_internal
+  mcp_public:
+    driver: bridge
+    name: filazero_mcp_public
+
+volumes:
+  nginx_logs:
+    name: filazero_nginx_logs
