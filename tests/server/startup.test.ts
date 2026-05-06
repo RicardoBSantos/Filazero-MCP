@@ -47,7 +47,7 @@ describe("Server startup performance", () => {
     process.env.MCP_TRANSPORT = "http";
     process.env.MCP_HTTP_PORT = "0";
 
-    const expressFn: any = () => ({
+    const expressFn = Object.assign(() => ({
       use: vi.fn(),
       get: vi.fn(),
       post: vi.fn(),
@@ -56,8 +56,7 @@ describe("Server startup performance", () => {
         cb();
         return { close: vi.fn() };
       }),
-    });
-    expressFn.json = () => vi.fn();
+    }), { json: () => vi.fn() });
 
     vi.doMock("express", () => ({ default: expressFn }));
     vi.resetModules();

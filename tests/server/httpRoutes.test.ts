@@ -43,7 +43,7 @@ describe("HTTP Route Handlers", () => {
   let middlewares: Function[];
   let mockJson: ReturnType<typeof vi.fn>;
   let mockStatus: ReturnType<typeof vi.fn>;
-  let mockRes: any;
+  let mockRes: { json: ReturnType<typeof vi.fn>; status: ReturnType<typeof vi.fn>; headersSent: boolean; on: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     vi.resetModules();
@@ -81,8 +81,7 @@ describe("HTTP Route Handlers", () => {
       listen: mockListen,
     };
 
-    const expressFn: any = () => mockApp;
-    expressFn.json = () => vi.fn();
+    const expressFn = Object.assign(() => mockApp, { json: () => vi.fn() });
 
     vi.doMock("express", () => ({
       default: expressFn,
@@ -177,8 +176,7 @@ describe("HTTP Route Handlers", () => {
       delete: vi.fn((path: string, handler: Function) => { routes.delete[path] = handler; }),
       listen: mockListen2,
     };
-    const expressFn2: any = () => mockApp2;
-    expressFn2.json = () => vi.fn();
+    const expressFn2 = Object.assign(() => mockApp2, { json: () => vi.fn() });
     vi.doMock("express", () => ({ default: expressFn2 }));
 
     // Re-mock Server for this scope

@@ -76,8 +76,7 @@ describe("HTTP Transport (server.ts)", () => {
       listen: mockListen,
     };
 
-    const expressFn: any = () => mockApp;
-    expressFn.json = () => mockJsonMiddleware;
+    const expressFn = Object.assign(() => mockApp, { json: () => mockJsonMiddleware });
 
     vi.doMock("express", () => ({
       default: expressFn,
