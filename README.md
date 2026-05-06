@@ -57,6 +57,9 @@ FILAZERO_APP_ORIGIN=https://app.filazero.net
 # TTL do cache de empresas em segundos (padrão: 300)
 CACHE_TTL_COMPANIES=300
 
+# Limite de requisições por minuto à API Filazero (padrão: 30)
+RATE_LIMIT_RPM=30
+
 # Nível de log: debug | info | warn | error (padrão: info)
 LOG_LEVEL=info
 ```
@@ -264,7 +267,7 @@ Cria um agendamento (ticket) na plataforma. Requer autenticação do usuário.
 | `bearerToken`  | string | Token de autenticação do usuário                   |
 | `...campos`    | -      | Campos dinâmicos do formulário (`get_booking_form`)|
 
-**Retorna:** `ticketId` e `accessKey` do agendamento criado.
+**Retorna:** `ticketId`, `status` e mensagem de confirmação do agendamento criado.
 
 ---
 
@@ -365,7 +368,8 @@ src/
 └── utils/
     ├── apiHelpers.ts         # Helpers de extração e validação de API
     ├── errors.ts             # FilazeroBusinessError e formatação de erros
-    └── logger.ts             # Logger estruturado
+    ├── logger.ts             # Logger estruturado
+    └── rateLimiter.ts        # Sliding window rate limiter (requisições à API)
 ```
 
 ---
@@ -425,6 +429,7 @@ O handler `CallToolRequest` captura todos os erros não tratados e formata a men
 | Tipo de erro           | Formato da mensagem                                        |
 |------------------------|------------------------------------------------------------|
 | `FilazeroBusinessError`| `Falha ao [ação]: [mensagem da API]`                       |
+| `RateLimitExceededError`| `Limite de requisições excedido. Tente novamente em Xs.`  |
 | Erro HTTP sem negócio  | `Falha ao [ação]: HTTP 500: Request failed`                |
 | Erro genérico          | `Falha ao [ação]: [error.message]`                         |
 | Erro desconhecido      | `Falha ao [ação]: Erro desconhecido`                       |
@@ -483,6 +488,46 @@ Handler CallToolRequest captura
 
 ---
 
+## Rate Limiting
+
+O servidor possui **duas camadas** de rate limiting, cada uma protegendo um ponto diferente:
+
+### Camada 1: Nginx (requisições de entrada)
+
+Limita requisições **recebidas** por IP do cliente. Configurado via `nginx/nginx.conf`:
+
+| Zona          | Limite  | Burst | Onde aplicado          |
+|---------------|---------|-------|------------------------|
+| `mcp_global`  | 30r/min | 5     | Todas as rotas (`/`)   |
+| `mcp_strict`  | 10r/min | 2     | `/schedule` (agendamento) |
+
+Requisições excedentes recebem HTTP `429 Too Many Requests`.
+
+### Camada 2: Aplicação (requisições de saída)
+
+Limita requisições **enviadas** à API Filazero. Sliding window implementado em `src/utils/rateLimiter.ts`, aplicado como interceptor no cliente axios (`filazeroClient.ts`).
+
+| Configuração     | Valor padrão | Variável de ambiente |
+|------------------|-------------|----------------------|
+| Janela temporal  | 60 segundos | —                    |
+| Máx. requisições | 30          | `RATE_LIMIT_RPM`     |
+
+Quando excedido, lança `RateLimitExceededError` com tempo de espera calculado. Log emitido:
+
+```json
+{
+  "timestamp": "2026-05-06T12:00:00.000Z",
+  "level": "warn",
+  "message": "Rate limit exceeded",
+  "maxRequests": 30,
+  "windowMs": 60000,
+  "currentCount": 30,
+  "retryAfterMs": 45000
+}
+```
+
+---
+
 ## Logs
 
 Todos os logs são emitidos em `stderr` no formato JSON estruturado (nunca em `stdout`, que é reservado para o protocolo MCP).
@@ -514,6 +559,7 @@ Configurável via variável `LOG_LEVEL` (padrão: `info`). Mensagens abaixo do n
 | Nível   | Mensagem                         | Contexto                                  | Origem               |
 |---------|----------------------------------|-------------------------------------------|----------------------|
 | `info`  | `mcp_server_started`             | `{ transport, port? }`                    | `server.ts`          |
+| `warn`  | `Rate limit exceeded`            | `{ maxRequests, windowMs, currentCount, retryAfterMs }` | `rateLimiter.ts` |
 | `error` | `Filazero API request failed`    | `{ url, status, description }`            | `filazeroClient.ts`  |
 | `error` | `http_request_error`             | `{ error }`                               | `server.ts` (HTTP)   |
 
@@ -521,12 +567,15 @@ Configurável via variável `LOG_LEVEL` (padrão: `info`). Mensagens abaixo do n
 
 ## Variáveis de ambiente — referência completa
 
-| Variável               | Padrão                            | Descrição                          |
-|------------------------|-----------------------------------|------------------------------------|
-| `FILAZERO_API_URL`     | `https://api.staging.filazero.net`| URL base da API                    |
-| `FILAZERO_APP_ORIGIN`  | `https://app.filazero.net`        | Header `Origin` nas requisições    |
-| `CACHE_TTL_COMPANIES`  | `300`                             | TTL do cache de empresas (segundos)|
-| `LOG_LEVEL`            | `info`                            | Nível de log                       |
+| Variável               | Padrão                            | Descrição                                  |
+|------------------------|-----------------------------------|--------------------------------------------|
+| `FILAZERO_API_URL`     | `https://api.staging.filazero.net`| URL base da API                            |
+| `FILAZERO_APP_ORIGIN`  | `https://app.filazero.net`        | Header `Origin` nas requisições            |
+| `CACHE_TTL_COMPANIES`  | `300`                             | TTL do cache de empresas (segundos)        |
+| `RATE_LIMIT_RPM`       | `30`                              | Limite de requisições à API Filazero/min   |
+| `LOG_LEVEL`            | `info`                            | Nível de log                               |
+| `MCP_TRANSPORT`        | `stdio`                           | Transporte: `stdio` ou `http`              |
+| `MCP_HTTP_PORT`        | `3000`                            | Porta do servidor HTTP (modo `http`)       |
 
 ---
 
