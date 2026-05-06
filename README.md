@@ -369,6 +369,155 @@ src/
 
 ---
 
+## Tratamento de Erros
+
+O servidor MCP possui um pipeline de erros em 4 camadas, do mais específico ao mais genérico:
+
+### 1. Interceptor HTTP (axios)
+
+Toda requisição à API Filazero passa pelo interceptor em `filazeroClient.ts`. Quando a API retorna um erro HTTP, o interceptor:
+
+1. Extrai a mensagem de negócio do payload (`payload.messages[].type === "ERROR"`)
+2. Emite um log estruturado no `stderr` com URL, status HTTP e descrição
+3. Converte em `FilazeroBusinessError` se houver mensagem de negócio
+
+**Log emitido:**
+
+```json
+{
+  "timestamp": "2026-05-06T12:00:00.000Z",
+  "level": "error",
+  "message": "Filazero API request failed",
+  "url": "/api/companies",
+  "status": 403,
+  "description": "Acesso negado"
+}
+```
+
+### 2. Erro de negócio (`FilazeroBusinessError`)
+
+Classe customizada que encapsula mensagens de erro retornadas pela API Filazero. O helper `throwIfBusinessError()` inspeciona o payload de resposta buscando:
+
+```typescript
+// Formato esperado da API Filazero
+{
+  "messages": [
+    { "type": "ERROR", "description": "Empresa não encontrada" }
+  ]
+}
+```
+
+Prioridade de extração: campo `description` > campo `message` > fallback genérico.
+
+### 3. Validação de parâmetros (Zod)
+
+Cada tool valida seus argumentos com schemas Zod antes da execução. Erros de validação são interceptados no handler `CallToolRequest` do servidor:
+
+```
+Parametros invalidos para get_available_dates: Expected number, received string
+```
+
+### 4. Handler genérico no servidor (`server.ts`)
+
+O handler `CallToolRequest` captura todos os erros não tratados e formata a mensagem final usando `formatErrorMessage()`:
+
+| Tipo de erro           | Formato da mensagem                                        |
+|------------------------|------------------------------------------------------------|
+| `FilazeroBusinessError`| `Falha ao [ação]: [mensagem da API]`                       |
+| Erro HTTP sem negócio  | `Falha ao [ação]: HTTP 500: Request failed`                |
+| Erro genérico          | `Falha ao [ação]: [error.message]`                         |
+| Erro desconhecido      | `Falha ao [ação]: Erro desconhecido`                       |
+| Ferramenta inexistente | `Ferramenta desconhecida: [nome]`                          |
+| Validação Zod          | `Parametros invalidos para [nome]: [detalhes]`             |
+
+### 5. Erros no transporte HTTP (StreamableHTTP)
+
+Quando o servidor roda em modo HTTP (`MCP_TRANSPORT=http`), erros no processamento de requisições MCP retornam JSON-RPC 2.0:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": { "code": -32603, "message": "Internal server error" },
+  "id": null
+}
+```
+
+Rotas não-MCP retornam erros HTTP padrão:
+
+| Rota            | Método        | Resposta                                              |
+|-----------------|---------------|-------------------------------------------------------|
+| `GET /mcp`      | GET           | `405` — `Method not allowed. Use POST.`               |
+| `DELETE /mcp`   | DELETE        | `405` — `Method not allowed.`                         |
+| Qualquer outra  | *             | `404` — `Not found`                                   |
+
+**Log emitido em erro de transporte:**
+
+```json
+{
+  "timestamp": "2026-05-06T12:00:00.000Z",
+  "level": "error",
+  "message": "http_request_error",
+  "error": "mensagem do erro"
+}
+```
+
+### Fluxo completo de um erro
+
+```
+API Filazero retorna erro
+        │
+        ▼
+Interceptor axios extrai mensagem de negócio
+  → log "Filazero API request failed" (stderr)
+  → lança FilazeroBusinessError
+        │
+        ▼
+Tool catch formata: "Falha ao [ação]: [mensagem]"
+  → lança Error com mensagem formatada
+        │
+        ▼
+Handler CallToolRequest captura
+  → retorna erro ao cliente MCP via JSON-RPC
+```
+
+---
+
+## Logs
+
+Todos os logs são emitidos em `stderr` no formato JSON estruturado (nunca em `stdout`, que é reservado para o protocolo MCP).
+
+### Formato
+
+```json
+{
+  "timestamp": "2026-05-06T12:00:00.000Z",
+  "level": "info",
+  "message": "mcp_server_started",
+  "transport": "stdio"
+}
+```
+
+### Níveis
+
+Configurável via variável `LOG_LEVEL` (padrão: `info`). Mensagens abaixo do nível configurado são descartadas.
+
+| Nível   | Quando usar                                          |
+|---------|------------------------------------------------------|
+| `debug` | Detalhes internos de execução                        |
+| `info`  | Eventos normais (início do servidor, conexões)       |
+| `warn`  | Situações inesperadas mas recuperáveis               |
+| `error` | Falhas de requisição, erros de transporte            |
+
+### Catálogo de logs
+
+| Nível   | Mensagem                         | Contexto                                  | Origem               |
+|---------|----------------------------------|-------------------------------------------|----------------------|
+| `info`  | `mcp_server_started`             | `{ transport, port? }`                    | `server.ts`          |
+| `error` | `Filazero API request failed`    | `{ url, status, description }`            | `filazeroClient.ts`  |
+| `error` | `http_request_error`             | `{ error }`                               | `server.ts` (HTTP)   |
+
+---
+
 ## Variáveis de ambiente — referência completa
 
 | Variável               | Padrão                            | Descrição                          |
