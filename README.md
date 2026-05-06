@@ -16,7 +16,7 @@ O **Model Context Protocol** é um protocolo aberto que permite que modelos de l
 └──────────────────┘
 ```
 
-**Transporte:** stdio — o cliente inicia o processo do servidor e se comunica via stdin/stdout com mensagens JSON-RPC 2.0.
+**Transporte:** stdio (padrão) ou StreamableHTTP (Docker). Ver [Modos de transporte](#modos-de-transporte).
 
 **Capacidades expostas:**
 - **Tools** — funções que o LLM pode invocar (ex: listar empresas, criar agendamento)
@@ -29,6 +29,7 @@ O **Model Context Protocol** é um protocolo aberto que permite que modelos de l
 
 - Node.js >= 18
 - npm >= 9
+- Docker >= 20.10 e Docker Compose V2 (opcional, para deploy containerizado)
 
 ---
 
@@ -526,6 +527,200 @@ Configurável via variável `LOG_LEVEL` (padrão: `info`). Mensagens abaixo do n
 | `FILAZERO_APP_ORIGIN`  | `https://app.filazero.net`        | Header `Origin` nas requisições    |
 | `CACHE_TTL_COMPANIES`  | `300`                             | TTL do cache de empresas (segundos)|
 | `LOG_LEVEL`            | `info`                            | Nível de log                       |
+
+---
+
+## Docker e Nginx
+
+O servidor pode rodar em containers Docker com Nginx como reverse proxy, ideal para deploy em produção ou ambientes compartilhados.
+
+### Arquitetura dos containers
+
+```
+                                        ┌─────────────────────────────────┐
+                                        │         Docker Compose          │
+                                        │                                 │
+  Internet / Cliente MCP                │  ┌───────────────────────────┐  │
+         │                              │  │  nginx (porta 80)        │  │
+         │    porta 8080                │  │  ┌─────────────────────┐  │  │
+         └──────────────────────────────┼─►│  │ Rate limiting      │  │  │
+                                        │  │  │ Security headers   │  │  │
+                                        │  │  │ Gzip compression   │  │  │
+                                        │  │  │ Request proxying   │  │  │
+                                        │  │  └────────┬──────────┘  │  │
+                                        │  └───────────┼─────────────┘  │
+                                        │     rede interna (mcp_internal)│
+                                        │  ┌───────────┼─────────────┐  │
+                                        │  │  mcp-server (porta 3000)│  │
+                                        │  │           ▼             │  │
+                                        │  │  ┌─────────────────┐   │  │
+                                        │  │  │ Express + MCP   │   │  │
+                                        │  │  │ StreamableHTTP  │   │  │
+                                        │  │  └─────────────────┘   │  │
+                                        │  └─────────────────────────┘  │
+                                        └─────────────────────────────────┘
+```
+
+O sistema usa duas redes Docker:
+- **mcp_internal** — rede interna (sem acesso à internet) entre nginx e mcp-server
+- **mcp_public** — rede com acesso externo, apenas nginx conectado
+
+O mcp-server não expõe portas diretamente — todo tráfego passa pelo nginx.
+
+### Pré-requisitos
+
+- Docker >= 20.10
+- Docker Compose V2 (`docker compose`, não `docker-compose`)
+
+### Subindo os containers
+
+```bash
+# Build e start
+docker compose up -d
+
+# Verificar status
+docker compose ps
+
+# Ver logs
+docker compose logs -f
+
+# Parar
+docker compose down
+```
+
+O container `mcp-server` possui healthcheck — o nginx só inicia após o mcp-server estar saudável.
+
+### Testando os endpoints
+
+```bash
+# Health check via nginx
+curl http://localhost:8080/health
+# → {"status":"ok"}
+
+# Chamada MCP (JSON-RPC 2.0 via StreamableHTTP)
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {},
+      "clientInfo": {"name": "test", "version": "1.0"}
+    },
+    "id": 1
+  }'
+```
+
+> **Importante:** o transporte StreamableHTTP exige o header `Accept: application/json, text/event-stream`. Sem ele, o servidor retorna `406 Not Acceptable`.
+
+### Dockerfile (mcp-server)
+
+Build multi-stage com duas etapas:
+
+| Stage        | Base             | Função                                       |
+|--------------|------------------|----------------------------------------------|
+| `builder`    | `node:20-alpine` | Instala dependências e compila TypeScript     |
+| `production` | `node:20-alpine` | Copia apenas `dist/` e deps de produção      |
+
+Detalhes de segurança:
+- Roda como usuário não-root (`mcpuser`)
+- Apenas dependências de produção (`npm install --omit=dev`)
+- Imagem mínima baseada em Alpine
+
+### Dockerfile.nginx (reverse proxy)
+
+Baseado em `nginx:1.27-alpine`. Substitui a configuração padrão por configs customizadas em `nginx/`.
+
+### Configuração do Nginx
+
+**`nginx/nginx.conf`** — configuração global:
+
+| Configuração            | Valor             | Descrição                                          |
+|-------------------------|-------------------|----------------------------------------------------|
+| `worker_processes`      | `auto`            | Ajusta ao número de CPUs disponíveis               |
+| `limit_req_zone` global | `30r/m`           | Rate limit global: 30 requisições/minuto por IP    |
+| `limit_req_zone` strict | `10r/m`           | Rate limit restrito para endpoints sensíveis       |
+| `limit_req_status`      | `429`             | Retorna HTTP 429 quando rate limit excedido        |
+| `server_tokens`         | `off`             | Oculta versão do nginx nos headers de resposta     |
+| `client_max_body_size`  | `1m`              | Limita tamanho do body a 1MB                       |
+| `gzip`                  | `on`              | Compressão gzip para `application/json`            |
+| `log_format`            | `json_audit`      | Logs de acesso em JSON estruturado                 |
+
+**`nginx/conf.d/mcp-server.conf`** — proxy e rotas:
+
+| Rota         | Rate limit   | Burst | Descrição                              |
+|--------------|-------------|-------|----------------------------------------|
+| `/health`    | nenhum      | —     | Health check (sem log, retorno direto) |
+| `/`          | `mcp_global`| 5     | Rota padrão: 30 req/min + burst de 5  |
+| `/schedule`  | `mcp_strict`| 2     | Agendamento: 10 req/min + burst de 2  |
+
+Headers de segurança adicionados em todas as respostas:
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `X-XSS-Protection: 1; mode=block`
+
+Configurações de proxy:
+- `proxy_connect_timeout: 10s`
+- `proxy_read_timeout: 30s`
+- `proxy_send_timeout: 10s`
+- Headers `X-Real-IP`, `X-Forwarded-For` e `X-Forwarded-Proto` repassados
+
+### Logs do Nginx
+
+Logs de acesso em JSON estruturado, persistidos no volume `filazero_nginx_logs`:
+
+```json
+{
+  "time": "2026-05-06T12:00:00+00:00",
+  "remote_addr": "172.22.0.1",
+  "method": "POST",
+  "uri": "/mcp",
+  "status": 200,
+  "body_bytes": 207,
+  "request_time": 0.007,
+  "upstream_response_time": "0.007",
+  "http_user_agent": "curl/8.14.1",
+  "http_x_tenant_id": ""
+}
+```
+
+### Variáveis de ambiente (Docker)
+
+Além das variáveis padrão do servidor, o modo Docker adiciona:
+
+| Variável          | Padrão   | Descrição                                      |
+|-------------------|----------|-------------------------------------------------|
+| `MCP_TRANSPORT`   | `stdio`  | Transporte: `stdio` ou `http`                  |
+| `MCP_HTTP_PORT`   | `3000`   | Porta interna do servidor HTTP                  |
+| `NGINX_HTTP_PORT` | `8080`   | Porta externa mapeada pelo nginx                |
+
+O `docker-compose.yml` define `MCP_TRANSPORT=http` automaticamente. Para customizar a porta externa:
+
+```bash
+NGINX_HTTP_PORT=9090 docker compose up -d
+```
+
+### Recursos e limites
+
+O mcp-server roda com limites de recursos definidos no Compose:
+
+| Recurso  | Limite |
+|----------|--------|
+| CPU      | 0.5    |
+| Memória  | 256MB  |
+
+### Modos de transporte
+
+O servidor suporta dois modos de transporte, selecionados via `MCP_TRANSPORT`:
+
+| Modo    | Uso                        | Protocolo       | Como conectar                        |
+|---------|----------------------------|-----------------|--------------------------------------|
+| `stdio` | CLI, Claude Desktop, IDEs  | stdin/stdout    | Cliente inicia o processo diretamente|
+| `http`  | Docker, API remota, multi-tenant | HTTP POST `/mcp` | StreamableHTTP via porta 8080     |
+
+No modo `stdio` (padrão), o servidor comunica via stdin/stdout — ideal para clientes locais. No modo `http` (usado no Docker), o servidor expõe um endpoint Express que aceita requisições JSON-RPC 2.0 via HTTP POST.
 
 ---
 
