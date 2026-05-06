@@ -90,6 +90,53 @@ npm test
 npm run test:watch
 ```
 
+### Cobertura dos testes
+
+**18 arquivos de teste — 128 testes — todos passando** ✅
+
+#### Tools (8 arquivos, 47 testes)
+
+| Arquivo | Testes | Status | O que valida |
+|---------|--------|--------|--------------|
+| `listCompanies.test.ts` | 7 | ✅ | Normalização de empresas, cache na segunda chamada, erro sem slug/name, erro de API |
+| `getCompanyServices.test.ts` | 7 | ✅ | Resolução de `abstractServiceId` vs `id`, nome padrão, erro sem ID válido, erro de negócio |
+| `getAvailableDates.test.ts` | 6 | ✅ | Extração de `days`/`availableDays`, array vazio, endpoint correto com year/month, nextToolHint |
+| `getAvailableSessions.test.ts` | 6 | ✅ | Extração de `sessions`/`resources`, endpoint com locationId/serviceId, nextToolHint, erro de negócio |
+| `getBookingForm.test.ts` | 5 | ✅ | Campos `customFields`/`fields`, endpoint com providerId/sessionId, nextToolHint, erro de API |
+| `scheduleAppointment.test.ts` | 6 | ✅ | Retorno de ticketId/status, bearerToken não enviado no body, Authorization header, status padrão |
+| `checkTicketStatus.test.ts` | 7 | ✅ | Extração de `data.data`, conversão de datas ISO→pt-BR, accessKey como query param, response inválida |
+| `listMyTickets.test.ts` | 6 | ✅ | Extração de `tickets`/`data`, Authorization header, endpoint correto, array vazio |
+
+#### Utils (4 arquivos, 30 testes)
+
+| Arquivo | Testes | Status | O que valida |
+|---------|--------|--------|--------------|
+| `errors.test.ts` | 16 | ✅ | `isRecord` (6 casos), `getBusinessErrorDescription` (7 casos), `throwIfBusinessError`, `formatErrorMessage` (5 formatos) |
+| `apiHelpers.test.ts` | 14 | ✅ | `resolveServiceId` (5 casos), `extractArrayPayload` (7 casos), `checkAndExtract` (2 casos) |
+| `rateLimiter.test.ts` | 8 | ✅ | Sliding window, `RateLimitExceededError`, expiração de janela, reset, retry-after em segundos |
+| `logger.test.ts` | 9 | ✅ | JSON estruturado no stderr, dados extras, newline, filtragem por nível (debug/info/warn/error), fallback para nível inválido |
+
+#### Cache (1 arquivo, 8 testes)
+
+| Arquivo | Testes | Status | O que valida |
+|---------|--------|--------|--------------|
+| `cache.test.ts` | 8 | ✅ | Get/set, expiração por TTL, remoção de entrada expirada, isolamento por chave, TTL zero |
+
+#### Server (3 arquivos, 8 testes)
+
+| Arquivo | Testes | Status | O que valida |
+|---------|--------|--------|--------------|
+| `createServer.test.ts` | 2 | ✅ | Registro de 6 handlers (tools, resources, prompts), nome e versão corretos |
+| `httpRoutes.test.ts` | 5 | ✅ | `GET /health` → 200, `GET /mcp` → 405, `DELETE /mcp` → 405, `POST /mcp` → StreamableHTTP, erro 500, 404 handler |
+| `httpTransport.test.ts` | 2 | ✅ | Seleção de transporte stdio (padrão) vs http (`MCP_TRANSPORT=http`) |
+| `startup.test.ts` | 1 | ✅ | Inicialização em menos de 3 segundos (stdio e http) |
+
+#### Performance (1 arquivo, 6 testes)
+
+| Arquivo | Testes | Status | O que valida |
+|---------|--------|--------|--------------|
+| `publicToolsLatency.test.ts` | 6 | ✅ | P95 < 2000ms para cada tool pública (mocks): `list_companies`, `get_company_services`, `get_available_dates`, `get_available_sessions`, `get_booking_form`, `check_ticket_status` |
+
 ---
 
 ## Testando com MCP Inspector
