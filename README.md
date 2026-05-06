@@ -63,9 +63,6 @@ RATE_LIMIT_RPM=30
 # Nível de log: debug | info | warn | error (padrão: info)
 LOG_LEVEL=info
 ```
-
-> O arquivo `.env` é ignorado pelo git. Nunca commite credenciais.
-
 ---
 
 ## Build e execução
