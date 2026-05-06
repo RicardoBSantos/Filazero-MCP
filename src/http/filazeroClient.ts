@@ -2,6 +2,7 @@ import axios from "axios";
 import { config } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 import { FilazeroBusinessError, getBusinessErrorDescription } from "../utils/errors.js";
+import { SlidingWindowRateLimiter } from "../utils/rateLimiter.js";
 
 export const filazeroClient = axios.create({
   baseURL: config.apiUrl,
@@ -12,6 +13,13 @@ export const filazeroClient = axios.create({
     "User-Agent": "MCP-Server-FilaZero/1.0",
     DNT: "1",
   },
+});
+
+export const rateLimiter = new SlidingWindowRateLimiter(config.rateLimitRpm);
+
+filazeroClient.interceptors.request.use((requestConfig) => {
+  rateLimiter.acquire();
+  return requestConfig;
 });
 
 export const writeHeaders = {

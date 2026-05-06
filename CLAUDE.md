@@ -37,6 +37,7 @@ Single-file server (`src/index.ts`) using `@modelcontextprotocol/sdk`. All logic
 - `FILAZERO_API_URL` — API base URL (default: `https://api.staging.filazero.net`)
 - `FILAZERO_APP_ORIGIN` — Origin header value (default: `https://app.filazero.net`)
 - `CACHE_TTL_COMPANIES` — companies cache TTL in seconds (default: 300)
+- `RATE_LIMIT_RPM` — max API requests per minute (default: 30)
 
 Uses `dotenv` — place variables in `.env` (gitignored).
 

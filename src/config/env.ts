@@ -6,6 +6,7 @@ const DEFAULT_API_URL = "https://api.staging.filazero.net";
 const DEFAULT_APP_ORIGIN = "https://app.filazero.net";
 const DEFAULT_CACHE_TTL_COMPANIES = 300;
 const DEFAULT_LOG_LEVEL = "info";
+const DEFAULT_RATE_LIMIT_RPM = 30;
 
 function normalizeUrl(url: string): string {
   return url.replace(/\/+$/, "");
@@ -30,4 +31,5 @@ export const config = {
   appOrigin: normalizeUrl(process.env.FILAZERO_APP_ORIGIN || DEFAULT_APP_ORIGIN),
   cacheTtlCompanies: parseTtl(process.env.CACHE_TTL_COMPANIES, DEFAULT_CACHE_TTL_COMPANIES),
   logLevel: process.env.LOG_LEVEL || DEFAULT_LOG_LEVEL,
+  rateLimitRpm: parseTtl(process.env.RATE_LIMIT_RPM, DEFAULT_RATE_LIMIT_RPM),
 };
