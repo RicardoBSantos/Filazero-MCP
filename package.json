@@ -12,7 +12,8 @@
     "start": "node dist/index.js",
     "dev": "tsc --watch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "inspect": "npx @modelcontextprotocol/inspector --transport http --server-url http://localhost:3001/mcp"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.1",
