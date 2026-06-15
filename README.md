@@ -43,28 +43,6 @@ npm install
 
 ---
 
-## Configuração
-
-Crie um arquivo `.env` na raiz do projeto:
-
-```env
-# URL base da API Filazero (padrão: staging)
-FILAZERO_API_URL=https://api.staging.filazero.net
-
-# Origin enviado nos headers HTTP para simular o app web
-FILAZERO_APP_ORIGIN=https://app.filazero.net
-
-# TTL do cache de empresas em segundos (padrão: 300)
-CACHE_TTL_COMPANIES=300
-
-# Limite de requisições por minuto à API Filazero (padrão: 30)
-RATE_LIMIT_RPM=30
-
-# Nível de log: debug | info | warn | error (padrão: info)
-LOG_LEVEL=info
-```
----
-
 ## Build e execução
 
 ```bash
